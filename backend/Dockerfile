@@ -5,18 +5,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# System dependencies for OCR + PDF
+# System dependencies for OCR + PDF processing
+# Note: Using libgl1 and libglx-mesa0 instead of removed libgl1-mesa-glx
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-eng \
     poppler-utils \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
-    libgthread-2.0-0 \
     gcc \
     g++ \
     curl \
@@ -24,15 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python deps (uses pre-built wheels from PyPI for Python 3.11)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
 COPY . .
 
-# Create runtime dirs
 RUN mkdir -p uploads processed vectordb reports
 
 EXPOSE 8000
