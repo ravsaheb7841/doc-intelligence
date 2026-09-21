@@ -1,0 +1,50 @@
+# Environment
+.env
+.env.*
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+venv/
+env/
+ENV/
+.venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data
+uploads/*
+processed/*
+vectordb/*
+reports/*
+
+# Models cache
+.cache/
+*.pkl
+*.h5
+*.pt
+*.pth
+*.onnx
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Docs
+*.md
+README.md
+LICENSE
+
+# Logs
+*.log
+logs/

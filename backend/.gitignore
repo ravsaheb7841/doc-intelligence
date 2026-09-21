@@ -1,0 +1,53 @@
+# Environment
+.env
+.env.local
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Data
+uploads/*
+processed/*
+vectordb/*
+reports/*
+!uploads/.gitkeep
+!processed/.gitkeep
+!vectordb/.gitkeep
+!reports/.gitkeep
+
+# ML Models cache
+.cache/
+*.pkl
+*.h5
+*.pt
+*.pth
+*.onnx
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp

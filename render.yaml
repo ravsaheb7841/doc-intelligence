@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: docintel-backend
+    env: docker                    # Use Docker
+    region: singapore
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: MONGO_URL
+        sync: false
+      - key: MONGO_DB_NAME
+        value: doc_intelligence
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: 1440
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: MAX_FILE_SIZE
+        value: 52428800
+    healthCheckPath: /health
+    autoDeploy: true
