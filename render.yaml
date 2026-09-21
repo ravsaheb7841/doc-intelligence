@@ -1,11 +1,13 @@
 services:
   - type: web
     name: docintel-backend
-    env: docker                    # Use Docker
+    env: docker
     region: singapore
     plan: free
     rootDir: backend
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: MONGO_URL
         sync: false
@@ -25,5 +27,3 @@ services:
         sync: false
       - key: MAX_FILE_SIZE
         value: 52428800
-    healthCheckPath: /health
-    autoDeploy: true
