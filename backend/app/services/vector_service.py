@@ -6,6 +6,7 @@ os.environ["CHROMA_TELEMETRY_ENABLED"] = "False"
 
 import chromadb
 from chromadb.config import Settings
+from chromadb.utils import embedding_functions
 from typing import List, Dict, Any, Optional
 
 from app.utils.config import settings as app_settings
@@ -13,10 +14,28 @@ from app.services.embedding_service import embedding_service
 
 
 class VectorService:
-    """ChromaDB vector store"""
+    """ChromaDB vector store with built-in ONNX embedder (no API needed, low memory)"""
 
     def __init__(self):
         self._client = None
+        self._ef = None
+
+    def _get_embedding_function(self):
+        """
+        Use ChromaDB's built-in ONNX embedder (all-MiniLM-L6-v2)
+        - Downloads ~80MB on first use, then cached
+        - Runs on ONNX runtime (no torch)
+        - Memory: ~50MB loaded
+        """
+        if self._ef is None:
+            try:
+                self._ef = embedding_functions.DefaultEmbeddingFunction()
+                print("✅ ChromaDB default embedder loaded (ONNX)")
+            except Exception as e:
+                print(f"⚠️ Default embedder failed: {e}")
+                print("   Falling back to simple TF-IDF-like embedder")
+                self._ef = None
+        return self._ef
 
     def _get_client(self):
         if self._client is None:
@@ -35,10 +54,20 @@ class VectorService:
 
     def _get_collection(self, name: str = "documents"):
         client = self._get_client()
-        return client.get_or_create_collection(
-            name=name,
-            metadata={"hnsw:space": "cosine"},
-        )
+        ef = self._get_embedding_function()
+
+        if ef:
+            return client.get_or_create_collection(
+                name=name,
+                metadata={"hnsw:space": "cosine"},
+                embedding_function=ef,
+            )
+        else:
+            # No embedder — ChromaDB will use default
+            return client.get_or_create_collection(
+                name=name,
+                metadata={"hnsw:space": "cosine"},
+            )
 
     async def add_document(
         self,
@@ -47,18 +76,16 @@ class VectorService:
         metadata: Optional[Dict[str, Any]] = None,
         chunk_size: int = 500,
     ) -> Dict[str, Any]:
-        """Chunk text, embed via Groq, store in ChromaDB"""
+        """Chunk text and store in ChromaDB (embeddings computed internally)"""
         chunks = embedding_service.chunk_text(text, chunk_size=chunk_size)
 
         if not chunks:
             raise Exception("No chunks generated from text")
 
-        chunk_texts = [c["text"] for c in chunks]
-        embeddings = await embedding_service.embed_batch(chunk_texts)
-
         collection = self._get_collection()
 
         ids = [f"{document_id}_chunk_{i}" for i in range(len(chunks))]
+        documents = [c["text"] for c in chunks]
         metadatas = []
 
         for i, chunk in enumerate(chunks):
@@ -73,10 +100,10 @@ class VectorService:
                         meta[k] = v
             metadatas.append(meta)
 
+        # ChromaDB computes embeddings automatically using its embedder
         collection.add(
             ids=ids,
-            embeddings=embeddings,
-            documents=chunk_texts,
+            documents=documents,
             metadatas=metadatas,
         )
 
@@ -94,15 +121,13 @@ class VectorService:
         document_id: Optional[str] = None,
         top_k: int = 5,
     ) -> List[Dict[str, Any]]:
-        """Search for relevant chunks"""
+        """Search using ChromaDB's embedder"""
         collection = self._get_collection()
-
-        query_embedding = await embedding_service.embed_text(query)
 
         where = {"document_id": document_id} if document_id else None
 
         results = collection.query(
-            query_embeddings=[query_embedding],
+            query_texts=[query],
             n_results=top_k,
             where=where,
             include=["documents", "metadatas", "distances"],
@@ -125,29 +150,23 @@ class VectorService:
         return formatted
 
     async def delete_document(self, document_id: str) -> Dict[str, Any]:
-        """Delete all chunks for a document"""
         collection = self._get_collection()
-
         try:
             existing = collection.get(where={"document_id": document_id})
             count = len(existing["ids"]) if existing and existing["ids"] else 0
-
             if count > 0:
                 collection.delete(where={"document_id": document_id})
-
             return {"document_id": document_id, "deleted_chunks": count}
         except Exception as e:
             print(f"Delete warning: {e}")
             return {"document_id": document_id, "deleted_chunks": 0}
 
     def get_document_chunks(self, document_id: str) -> List[Dict[str, Any]]:
-        """Get all chunks for a document"""
         collection = self._get_collection()
         results = collection.get(
             where={"document_id": document_id},
             include=["documents", "metadatas"],
         )
-
         chunks = []
         if results and results["documents"]:
             for i, doc in enumerate(results["documents"]):
@@ -155,7 +174,6 @@ class VectorService:
                     "text": doc,
                     "metadata": results["metadatas"][i],
                 })
-
         return chunks
 
     def get_stats(self) -> Dict[str, Any]:

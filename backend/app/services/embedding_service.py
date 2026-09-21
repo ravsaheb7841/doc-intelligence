@@ -1,62 +1,20 @@
-import httpx
-import os
+import re
 from typing import List, Dict, Any
-from app.utils.config import settings
 
 
 class EmbeddingService:
-    """Generate embeddings using Groq API (no local model = low memory)"""
+    """
+    Lightweight embedding service.
+    
+    ChromaDB handles embeddings internally using its default ONNX embedder
+    (all-MiniLM-L6-v2). This service only handles text chunking.
+    
+    Memory: ~50MB (vs sentence-transformers 500MB+)
+    Quality: Good (384 dims, MTEB benchmark: 56.26)
+    """
 
     def __init__(self):
-        self.api_key = settings.GROQ_API_KEY
-        self.base_url = "https://api.groq.com/openai/v1/embeddings"
-        # Groq's free embedding model
-        self.model = "nomic-embed-text-v1.5"
-        self.dimension = 768
-
-    @property
-    def is_available(self) -> bool:
-        return bool(self.api_key) and self.api_key != "your-groq-api-key-here"
-
-    async def _call_embeddings_api(self, texts: List[str]) -> List[List[float]]:
-        """Call Groq embeddings API"""
-        if not self.is_available:
-            raise Exception("Groq API key not configured")
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "model": self.model,
-            "input": texts,
-        }
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(self.base_url, headers=headers, json=payload)
-
-            if response.status_code != 200:
-                error_text = response.text[:500]
-                raise Exception(f"Groq embeddings error {response.status_code}: {error_text}")
-
-            data = response.json()
-            embeddings = [item["embedding"] for item in data["data"]]
-            return embeddings
-
-    async def embed_text(self, text: str) -> List[float]:
-        """Generate embedding for single text"""
-        results = await self._call_embeddings_api([text])
-        return results[0]
-
-    async def embed_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
-        """Generate embeddings for multiple texts (batched)"""
-        all_embeddings = []
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            embeddings = await self._call_embeddings_api(batch)
-            all_embeddings.extend(embeddings)
-        return all_embeddings
+        print("EmbeddingService: ChromaDB default embedder (ONNX, low memory)")
 
     def chunk_text(
         self,
@@ -64,7 +22,7 @@ class EmbeddingService:
         chunk_size: int = 500,
         overlap: int = 50,
     ) -> List[Dict[str, Any]]:
-        """Split text into chunks for embedding"""
+        """Split text into chunks"""
         chunks = []
         text = text.strip()
 
@@ -88,7 +46,8 @@ class EmbeddingService:
                     chunk_index += 1
 
                 if len(para) > chunk_size:
-                    sentences = para.replace(". ", ".|").split("|")
+                    # Split long paragraph by sentences
+                    sentences = re.split(r'(?<=[.!?])\s+', para)
                     sub_chunk = ""
                     for sent in sentences:
                         if len(sub_chunk) + len(sent) + 1 <= chunk_size:
